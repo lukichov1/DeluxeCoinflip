@@ -97,22 +97,30 @@ public class CoinflipGUI implements Listener {
     }
 
     public void startAnimation(WrappedScheduler scheduler, Gui gui, GuiItem winnerHead, GuiItem loserHead,
-                                OfflinePlayer winner, OfflinePlayer loser, CoinflipGame game,
-                                Player targetPlayer, Location regionLoc, boolean isWinnerThread) {
+                               OfflinePlayer winner, OfflinePlayer loser, CoinflipGame game,
+                               Player targetPlayer, Location regionLoc, boolean isWinnerThread) {
 
-        ConfigurationSection animationConfig1 = plugin.getConfig().getConfigurationSection("coinflip-gui.animation.1");
-        ConfigurationSection animationConfig2 = plugin.getConfig().getConfigurationSection("coinflip-gui.animation.2");
+        // Load multiple animation configurations
+        List<ItemStack> animationItems = new ArrayList<>();
+        ConfigurationSection animationSection = plugin.getConfig().getConfigurationSection("coinflip-gui.animation");
+        if (animationSection != null) {
+            for (String key : animationSection.getKeys(false)) {
+                ConfigurationSection animConfig = animationSection.getConfigurationSection(key);
+                if (animConfig != null) {
+                    ItemStack item = ItemStackBuilder.getItemStack(animConfig).build();
+                    animationItems.add(item);
+                }
+            }
+        }
 
-        ItemStack firstAnimationItem = (animationConfig1 != null)
-                ? ItemStackBuilder.getItemStack(animationConfig1).build()
-                : new ItemStack(Material.YELLOW_STAINED_GLASS_PANE);
-
-        ItemStack secondAnimationItem = (animationConfig2 != null)
-                ? ItemStackBuilder.getItemStack(animationConfig2).build()
-                : new ItemStack(Material.GRAY_STAINED_GLASS_PANE);
+        // Fallback items if no configurations found
+        if (animationItems.isEmpty()) {
+            animationItems.add(new ItemStack(Material.YELLOW_STAINED_GLASS_PANE));
+            animationItems.add(new ItemStack(Material.GRAY_STAINED_GLASS_PANE));
+        }
 
         class AnimationState {
-            boolean alternate = false;
+            int currentIndex = 0;
             int count = 0;
         }
 
@@ -190,16 +198,18 @@ public class CoinflipGUI implements Listener {
                 return;
             }
 
-            // Animation swapping
-            gui.setItem(13, state.alternate ? winnerHead : loserHead);
+            // Animation cycling through multiple items
+            gui.setItem(13, state.currentIndex % 2 == 0 ? winnerHead : loserHead);
 
-            GuiItem filler = new GuiItem(state.alternate ? firstAnimationItem.clone() : secondAnimationItem.clone());
+            // Get current animation item
+            ItemStack currentItem = animationItems.get(state.currentIndex % animationItems.size());
+            GuiItem filler = new GuiItem(currentItem.clone());
 
             for (int i = 0; i < gui.getInventory().getSize(); i++) {
                 if (i != 13) gui.setItem(i, filler);
             }
 
-            state.alternate = !state.alternate;
+            state.currentIndex = (state.currentIndex + 1) % animationItems.size();
 
             if (targetPlayer.isOnline()) {
                 targetPlayer.playSound(targetPlayer.getLocation(), Sound.BLOCK_WOODEN_BUTTON_CLICK_ON, 1f, 1f);
